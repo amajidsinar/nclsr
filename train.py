@@ -1,3 +1,4 @@
+from comet_ml import Experiment
 import torch
 from data import *
 from model import *
@@ -7,6 +8,13 @@ import math
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 from pathlib import Path
+from dataset import NameDataset
+from sklearn.metrics import precision_recall_fscore_support, average_precision_score
+from tqdm import tqdm
+
+
+experiment = Experiment(api_key="9mPrEpU6XpLG2Pc6MO811ca4e", project_name="rnn-name-classifier")
+
 
 n_hidden = 128
 n_epochs = 100000
@@ -29,13 +37,14 @@ def randomTrainingPair():
     line_tensor = Variable(lineToTensor(line))
     return category, line, category_tensor, line_tensor
 
-def evaluate(line_tensor):
+def infer(line_tensor):
     hidden = rnn.initHidden()
 
     for i in range(line_tensor.size()[0]):
         output, hidden = rnn(line_tensor[i], hidden)
 
     return output
+
 
 rnn = RNN(n_letters, n_hidden, n_categories)
 optimizer = torch.optim.SGD(rnn.parameters(), lr=learning_rate)
@@ -70,11 +79,12 @@ start = time.time()
 
 n_confusion = 10000
 
-for epoch in range(1, n_epochs + 1):
+for epoch in tqdm(range(1, n_epochs + 1)):
+    log = {}
     category, line, category_tensor, line_tensor = randomTrainingPair()
     output, loss = train(category_tensor, line_tensor)
     current_loss += loss
-
+    log['loss']=loss
     
     # Print epoch number, loss, name and guess
     if epoch % print_every == 0:
@@ -86,38 +96,26 @@ for epoch in range(1, n_epochs + 1):
     if epoch % plot_every == 0:
         all_losses.append(current_loss / plot_every)
         current_loss = 0
+    
 
-    confusion = torch.zeros(n_categories, n_categories)
-    # Go through a bunch of examples and record which are correctly guessed
-    for i in range(n_confusion):
-        category, line, category_tensor, line_tensor = randomTrainingPair()
-        output = evaluate(line_tensor)
-        guess, guess_i = categoryFromOutput(output)
-        category_i = all_categories.index(category)
-        confusion[category_i][guess_i] += 1
+    targets = []
+    predictions = []
+    val_dataset = NameDataset("data/val")
+    for target_language, name, name_tensor in val_dataset:
+        output = infer(name_tensor)
+        prediction_language, _ = categoryFromOutput(output)
+        # print(f'target: {target_language}, prediction: {prediction_language}')
+        targets.append(target_language)
+        predictions.append(prediction_language)
+    prec, rec, fscore, _ = precision_recall_fscore_support(targets, predictions, average='weighted')
+    
+    log['prec'] = prec
+    log['rec'] = rec
+    log['fscore'] = fscore
+    for k, v in log.items():
+        print(f' {k}: {v}')
+    experiment.log_metrics(log)
 
-    # Normalize by dividing every row by its sum
-    for i in range(n_categories):
-        confusion[i] = confusion[i] / confusion[i].sum()
-
-    # Set up plot
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    cax = ax.matshow(confusion.numpy())
-    fig.colorbar(cax)
-
-    # Set up axes
-    ax.set_xticklabels([''] + all_categories, rotation=90)
-    ax.set_yticklabels([''] + all_categories)
-
-    # Force label at every tick
-    ax.xaxis.set_major_locator(ticker.MultipleLocator(1))
-    ax.yaxis.set_major_locator(ticker.MultipleLocator(1))
-
-    # sphinx_gallery_thumbnail_number = 2
-    fig_path = f'out/{epoch}.jpg'
-    Path(fig_path).parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(fig_path)
 
 torch.save(rnn, 'char-rnn-classification.pt')
 
