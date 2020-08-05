@@ -11,13 +11,15 @@ class RNN(nn.Module):
         self.i2h = nn.Linear(input_size + hidden_size, hidden_size)
         self.i2o = nn.Linear(input_size + hidden_size, output_size)
         self.softmax = nn.LogSoftmax()
+        self.register_buffer('hidden', Variable(torch.zeros(1, self.hidden_size)))
 
-    def forward(self, input, hidden):
-        combined = torch.cat((input, hidden), 1)
-        hidden = self.i2h(combined)
+    def forward(self, input):
+        # import pdb; pdb.set_trace()
+        combined = torch.cat((input, self.hidden), 1)
+        self.hidden = self.i2h(combined)
         output = self.i2o(combined)
         output = self.softmax(output)
-        return output, hidden
+        return output
 
     def initHidden(self):
         return Variable(torch.zeros(1, self.hidden_size))

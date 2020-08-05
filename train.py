@@ -38,10 +38,10 @@ def randomTrainingPair():
     return category, line, category_tensor, line_tensor
 
 def infer(line_tensor):
-    hidden = rnn.initHidden()
-
-    for i in range(line_tensor.size()[0]):
-        output, hidden = rnn(line_tensor[i], hidden)
+    rnn.eval()
+    with torch.no_grad():
+        for i in range(line_tensor.size()[0]):
+            output = rnn(line_tensor[i])
 
     return output
 
@@ -51,11 +51,12 @@ optimizer = torch.optim.SGD(rnn.parameters(), lr=learning_rate)
 criterion = nn.NLLLoss()
 
 def train(category_tensor, line_tensor):
-    hidden = rnn.initHidden()
+    rnn.train()
+    # hidden = rnn.initHidden()
     optimizer.zero_grad()
 
     for i in range(line_tensor.size()[0]):
-        output, hidden = rnn(line_tensor[i], hidden)
+        output = rnn(line_tensor[i])
 
     loss = criterion(output, category_tensor)
     loss.backward()
