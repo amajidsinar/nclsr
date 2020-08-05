@@ -11,11 +11,11 @@ from pathlib import Path
 from dataset import NameDataset
 from sklearn.metrics import precision_recall_fscore_support, average_precision_score
 from tqdm import tqdm
+from torch.utils.data import DataLoader
 
+experiment = Experiment(api_key="9mPrEpU6XpLG2Pc6MO811ca4e", project_name="rnn-name-classifier", disabled=False)
 
-experiment = Experiment(api_key="9mPrEpU6XpLG2Pc6MO811ca4e", project_name="rnn-name-classifier")
-
-
+batch_size = 1024
 n_hidden = 128
 n_epochs = 100000
 print_every = 5000
@@ -30,6 +30,8 @@ def categoryFromOutput(output):
 def randomChoice(l):
     return l[random.randint(0, len(l) - 1)]
 
+# import pdb; pdb.set_trace()
+
 def randomTrainingPair():
     category = randomChoice(all_categories)
     line = randomChoice(category_lines[category])
@@ -40,33 +42,33 @@ def randomTrainingPair():
 def infer(line_tensor):
     rnn.eval()
     with torch.no_grad():
-        for i in range(line_tensor.size()[0]):
-            output = rnn(line_tensor[i])
-
+        output = rnn(line_tensor)
+        line_tensor = torch.nn.functional.softmax(line_tensor)
     return output
 
 
 rnn = RNN(n_letters, n_hidden, n_categories)
 optimizer = torch.optim.SGD(rnn.parameters(), lr=learning_rate)
-criterion = nn.NLLLoss()
+criterion = nn.CrossEntropyLoss()
 
-def train(category_tensor, line_tensor):
+def train(category_tensors, line_tensors):
     rnn.train()
-    # hidden = rnn.initHidden()
     optimizer.zero_grad()
+    output = rnn(line_tensors)
+    # import pdb; pdb.set_trace()
 
-    for i in range(line_tensor.size()[0]):
-        output = rnn(line_tensor[i])
-
-    loss = criterion(output, category_tensor)
+    loss = criterion(output, category_tensors)
     loss.backward()
 
     optimizer.step()
 
     return output, loss.item()
 
+
+# def train_batch(category_tensor, line_tensor)
+
 # Keep track of losses for plotting
-current_loss = 0
+
 all_losses = []
 
 def timeSince(since):
@@ -80,12 +82,26 @@ start = time.time()
 
 n_confusion = 10000
 
+train_dataset = NameDataset("data/train")
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=train_dataset.collate_fn, pin_memory=True, num_workers=4)
+val_dataset = NameDataset("data/val")
+
+
+
 for epoch in tqdm(range(1, n_epochs + 1)):
+    current_loss = 0
+    # import pdb; pdb.set_trace()
+    print(f'epoch: {epoch}')
+
     log = {}
-    category, line, category_tensor, line_tensor = randomTrainingPair()
-    output, loss = train(category_tensor, line_tensor)
-    current_loss += loss
-    log['loss']=loss
+    for languages, language_tensors, name, name_tensors in tqdm(train_loader):
+        output, loss = train(language_tensors, name_tensors)
+    # category, line, category_tensor, line_tensor = randomTrainingPair()
+    # output, loss = train(category_tensor, line_tensor)
+        current_loss += loss
+
+    log['loss']=current_loss
+
     
     # Print epoch number, loss, name and guess
     if epoch % print_every == 0:
@@ -101,12 +117,12 @@ for epoch in tqdm(range(1, n_epochs + 1)):
 
     targets = []
     predictions = []
-    val_dataset = NameDataset("data/val")
-    for target_language, name, name_tensor in val_dataset:
+    
+    for language, language_tensor, name, name_tensor in val_dataset:
         output = infer(name_tensor)
         prediction_language, _ = categoryFromOutput(output)
         # print(f'target: {target_language}, prediction: {prediction_language}')
-        targets.append(target_language)
+        targets.append(language_tensor)
         predictions.append(prediction_language)
     prec, rec, fscore, _ = precision_recall_fscore_support(targets, predictions, average='weighted')
     

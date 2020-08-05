@@ -13,13 +13,19 @@ class RNN(nn.Module):
         self.softmax = nn.LogSoftmax()
         self.register_buffer('hidden', Variable(torch.zeros(1, self.hidden_size)))
 
-    def forward(self, input):
-        # import pdb; pdb.set_trace()
-        combined = torch.cat((input, self.hidden), 1)
-        self.hidden = self.i2h(combined)
-        output = self.i2o(combined)
-        output = self.softmax(output)
-        return output
+    def forward(self, name_tensors):
+        outputs = []
+        for name_tensor in name_tensors:
+            hidden = self.hidden
+            # import pdb; pdb.set_trace()
+            assert torch.all(torch.eq(hidden, torch.zeros(1, self.hidden_size)))
+            for char_tensor in name_tensor:
+                for char_tensor in name_tensor:
+                    combined = torch.cat((char_tensor, hidden), 1)
+                    hidden = self.i2h(combined)
+                    output = self.i2o(combined)
+            outputs.append(output)
+        outputs = torch.cat(outputs)
+        return outputs
 
-    def initHidden(self):
-        return Variable(torch.zeros(1, self.hidden_size))
+    
