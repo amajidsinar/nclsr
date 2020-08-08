@@ -1,6 +1,6 @@
 from comet_ml import Experiment
 import torch
-from data import *
+# from data import *
 from model import *
 import random
 import time
@@ -13,41 +13,34 @@ from sklearn.metrics import precision_recall_fscore_support, average_precision_s
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 
-experiment = Experiment(api_key="9mPrEpU6XpLG2Pc6MO811ca4e", project_name="rnn-name-classifier", disabled=False)
+experiment = Experiment(api_key="9mPrEpU6XpLG2Pc6MO811ca4e", project_name="rnn-name-classifier", disabled=True)
 
-batch_size = 1024
+batch_size = 2
 n_hidden = 128
 n_epochs = 100000
 print_every = 5000
 plot_every = 1000
 learning_rate = 0.005 # If you set this too high, it might explode. If too low, it might not learn
 
-def categoryFromOutput(output):
-    top_n, top_i = output.data.topk(1) # Tensor out of Variable with .data
-    category_i = top_i[0][0]
-    return all_categories[category_i], category_i
 
-def randomChoice(l):
-    return l[random.randint(0, len(l) - 1)]
+from dataset import LANG_TO_IDX
 
-# import pdb; pdb.set_trace()
-
-def randomTrainingPair():
-    category = randomChoice(all_categories)
-    line = randomChoice(category_lines[category])
-    category_tensor = Variable(torch.LongTensor([all_categories.index(category)]))
-    line_tensor = Variable(lineToTensor(line))
-    return category, line, category_tensor, line_tensor
+IDX_TO_LANG = {}
+for k,v in LANG_TO_IDX.items():
+    IDX_TO_LANG[v]=k
 
 def infer(line_tensor):
+    # import pdb; pdb.set_trace()
     rnn.eval()
     with torch.no_grad():
-        output = rnn(line_tensor)
-        line_tensor = torch.nn.functional.softmax(line_tensor)
-    return output
+        pred = rnn(line_tensor)
+        pred = torch.nn.functional.softmax(pred)
+        pred_conf, pred_class = torch.max(pred, dim=1)
+        pred_class = IDX_TO_LANG[pred_class.item()]
+    return pred_class, pred_conf 
 
 
-rnn = RNN(n_letters, n_hidden, n_categories)
+rnn = RNN(58, n_hidden, 18)
 optimizer = torch.optim.SGD(rnn.parameters(), lr=learning_rate)
 criterion = nn.CrossEntropyLoss()
 
@@ -85,7 +78,7 @@ n_confusion = 10000
 train_dataset = NameDataset("data/train")
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=train_dataset.collate_fn, pin_memory=True, num_workers=4)
 val_dataset = NameDataset("data/val")
-
+val_loader = DataLoader(val_dataset, batch_size=1, shuffle=True, collate_fn=train_dataset.collate_fn, pin_memory=True, num_workers=4)
 
 
 for epoch in tqdm(range(1, n_epochs + 1)):
@@ -95,6 +88,7 @@ for epoch in tqdm(range(1, n_epochs + 1)):
 
     log = {}
     for languages, language_tensors, name, name_tensors in tqdm(train_loader):
+        # import pdb; pdb.set_trace()
         output, loss = train(language_tensors, name_tensors)
     # category, line, category_tensor, line_tensor = randomTrainingPair()
     # output, loss = train(category_tensor, line_tensor)
@@ -104,10 +98,10 @@ for epoch in tqdm(range(1, n_epochs + 1)):
 
     
     # Print epoch number, loss, name and guess
-    if epoch % print_every == 0:
-        guess, guess_i = categoryFromOutput(output)
-        correct = '✓' if guess == category else '✗ (%s)' % category
-        print('%d %d%% (%s) %.4f %s / %s %s' % (epoch, epoch / n_epochs * 100, timeSince(start), loss, line, guess, correct))
+    # if epoch % print_every == 0:
+    #     guess, guess_i = categoryFromOutput(output)
+    #     correct = '✓' if guess == category else '✗ (%s)' % category
+    #     print('%d %d%% (%s) %.4f %s / %s %s' % (epoch, epoch / n_epochs * 100, timeSince(start), loss, line, guess, correct))
 
     # Add current loss avg to list of losses
     if epoch % plot_every == 0:
@@ -118,12 +112,10 @@ for epoch in tqdm(range(1, n_epochs + 1)):
     targets = []
     predictions = []
     
-    for language, language_tensor, name, name_tensor in val_dataset:
-        output = infer(name_tensor)
-        prediction_language, _ = categoryFromOutput(output)
-        # print(f'target: {target_language}, prediction: {prediction_language}')
+    for language, language_tensor, name, name_tensor in val_loader:
+        pred_class, _ = infer(name_tensor)
         targets.append(language_tensor)
-        predictions.append(prediction_language)
+        predictions.append(pred_class)
     prec, rec, fscore, _ = precision_recall_fscore_support(targets, predictions, average='weighted')
     
     log['prec'] = prec
