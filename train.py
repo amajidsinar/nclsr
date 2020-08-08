@@ -114,7 +114,7 @@ for epoch in tqdm(range(1, n_epochs + 1)):
     
     for language, language_tensor, name, name_tensor in val_loader:
         pred_class, _ = infer(name_tensor)
-        targets.append(language_tensor)
+        targets.append(language)
         predictions.append(pred_class)
     prec, rec, fscore, _ = precision_recall_fscore_support(targets, predictions, average='weighted')
     
