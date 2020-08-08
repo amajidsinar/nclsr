@@ -1,0 +1,1 @@
+docker build -f cpu.Dockerfile -t nclsr .
