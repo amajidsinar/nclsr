@@ -13,7 +13,7 @@ from sklearn.metrics import precision_recall_fscore_support, average_precision_s
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 
-experiment = Experiment(api_key="9mPrEpU6XpLG2Pc6MO811ca4e", project_name="rnn-name-classifier", disabled=True)
+experiment = Experiment(api_key="9mPrEpU6XpLG2Pc6MO811ca4e", project_name="rnn-name-classifier", disabled=False)
 
 batch_size = 2
 n_hidden = 128
