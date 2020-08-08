@@ -1,0 +1,5 @@
+matplotlib
+comet-ml
+scikit-learn
+cython
+torchtext==0.7.0
