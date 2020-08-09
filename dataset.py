@@ -31,7 +31,7 @@ class NameDataset:
     all_letters = string.ascii_letters + " .,;'-"
     n_letters = len(all_letters)
 
-    def __init__(self, root, mapping=LANG_TO_IDX):
+    def __init__(self, root, mapping=LANG_TO_IDX, max_len=20):
 
         self.annotations = []
         Annotation = namedtuple("Annotation", ["language", "name"])
@@ -49,32 +49,24 @@ class NameDataset:
     def __getitem__(self, index):
         language, name = self.annotations[index]
         name_tensor = self._encode_name(name)
-        name_tensor = torch.nn.functional.one_hot(
-            name_tensor, num_classes=self.n_letters
-        )
-        name_tensor = name_tensor.reshape(-1, 1, self.n_letters).to(torch.float32)
-        # import pdb; pdb.set_trace()
         language_tensor = torch.Tensor([self.mapping[language]]).to(torch.long)
+        # import pdb; pdb.set_trace()
 
         return language, language_tensor, name, name_tensor
 
     def collate_fn(self, batch):
-
-        # import pdb; pdb.set_trace()
+        
         languages = []
         language_tensors = []
         names = []
         name_tensors = []
-
-
-        # pdb.set_trace()
+        import pdb; pdb.set_trace()
         for language, language_tensor, name, name_tensor in batch:
             languages.append(language)
             language_tensors.append(language_tensor)
             names.append(name)
             name_tensors.append(name_tensor)
 
-        # import pdb; pdb.set_trace()
         language_tensors = torch.cat(language_tensors)
 
         return languages, language_tensors, names, name_tensors
@@ -84,7 +76,7 @@ class NameDataset:
         for char in name:
             encoded.append(self.all_letters.find(char))
         if not isinstance(encoded, torch.Tensor):
-            encoded = torch.Tensor(encoded).reshape(1, -1).to(torch.int64)
+            encoded = torch.Tensor(encoded).to(torch.int64)
         return encoded
 
     @classmethod
